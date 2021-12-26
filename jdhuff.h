@@ -134,7 +134,7 @@ typedef struct {                /* Bitreading working state within an MCU */
   cinfop->src->next_input_byte = br_state.next_input_byte; \
   cinfop->src->bytes_in_buffer = br_state.bytes_in_buffer; \
   permstate.get_buffer = get_buffer; \
-  permstate.bits_left = bits_left
+  permstate.bits_left = get_buffer == 0 ? 0 : (BIT_BUF_SIZE - (int)_tzcnt_u64(get_buffer) - 1)
 
 /*
  * These macros provide the in-line portion of bit fetching.
@@ -154,8 +154,10 @@ typedef struct {                /* Bitreading working state within an MCU */
  * is evaluated multiple times.
  */
 
+#define NEED_REFILL(nbits) (!(get_buffer & ((size_t)-1) >>(nbits)))
+
 #define CHECK_BIT_BUFFER(state, nbits, action) { \
-  if (bits_left < (nbits)) { \
+  if (NEED_REFILL(nbits)) { \
     if (!jpeg_fill_bit_buffer(&(state), get_buffer, bits_left, nbits)) \
       { action; } \
     get_buffer = (state).get_buffer;  bits_left = (state).bits_left; \
@@ -163,13 +165,13 @@ typedef struct {                /* Bitreading working state within an MCU */
 }
 
 #define GET_BITS(nbits) \
-  (((int)(get_buffer >> (bits_left -= (nbits)))) & ((1 << (nbits)) - 1))
+  (bits_left = PEEK_BITS(nbits), DROP_BITS(nbits), bits_left)
 
 #define PEEK_BITS(nbits) \
-  (((int)(get_buffer >> (bits_left -  (nbits)))) & ((1 << (nbits)) - 1))
+  ((int)(get_buffer >> (BIT_BUF_SIZE -  (nbits))))
 
 #define DROP_BITS(nbits) \
-  (bits_left -= (nbits))
+  (get_buffer <<= (nbits))
 
 /* Load up the bit buffer to a depth of at least nbits */
 EXTERN(boolean) jpeg_fill_bit_buffer(bitread_working_state *state,
@@ -196,7 +198,7 @@ EXTERN(boolean) jpeg_fill_bit_buffer(bitread_working_state *state,
 
 #define HUFF_DECODE(result, state, htbl, failaction, slowlabel) { \
   register int nb, look; \
-  if (bits_left < HUFF_LOOKAHEAD) { \
+  if (NEED_REFILL(HUFF_LOOKAHEAD)) { \
     if (!jpeg_fill_bit_buffer(&state, get_buffer, bits_left, 0)) \
       { failaction; } \
     get_buffer = state.get_buffer;  bits_left = state.bits_left; \

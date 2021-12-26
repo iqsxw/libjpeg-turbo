@@ -28,6 +28,8 @@
 #include "jpegcomp.h"
 #include "jstdhuff.c"
 
+#include <immintrin.h>
+
 
 /*
  * Expanded entropy decoder object for Huffman decoding.
@@ -277,7 +279,7 @@ jpeg_make_d_derived_tbl(j_decompress_ptr cinfo, boolean isDC, int tblno,
 #ifdef SLOW_SHIFT_32
 #define MIN_GET_BITS  15        /* minimum allowable value */
 #else
-#define MIN_GET_BITS  (BIT_BUF_SIZE - 7)
+#define MIN_GET_BITS  (BIT_BUF_SIZE - 9)
 #endif
 
 
@@ -295,7 +297,13 @@ jpeg_fill_bit_buffer(bitread_working_state *state,
   /* Attempt to load at least MIN_GET_BITS bits into get_buffer. */
   /* (It is assumed that no request will be for more than that many bits.) */
   /* We fail to do so only if we hit a marker or are forced to suspend. */
-
+  if (get_buffer) {
+      size_t tzcnt = _tzcnt_u64(get_buffer);
+      get_buffer &= ~((size_t)1 << tzcnt);
+      bits_left = (BIT_BUF_SIZE - (int)tzcnt - 1);
+  } else {
+      bits_left = 0;
+  }
   if (cinfo->unread_marker == 0) {      /* cannot advance past a marker */
     while (bits_left < MIN_GET_BITS) {
       register int c;
@@ -347,7 +355,7 @@ jpeg_fill_bit_buffer(bitread_working_state *state,
       }
 
       /* OK, load c into get_buffer */
-      get_buffer = (get_buffer << 8) | c;
+      get_buffer |= (size_t)c << (BIT_BUF_SIZE - 8 - bits_left);
       bits_left += 8;
     } /* end while */
   } else {
@@ -367,16 +375,17 @@ no_more_bytes:
         cinfo->entropy->insufficient_data = TRUE;
       }
       /* Fill the buffer with zero bits */
-      get_buffer <<= MIN_GET_BITS - bits_left;
+      //get_buffer <<= MIN_GET_BITS - bits_left;
       bits_left = MIN_GET_BITS;
     }
   }
+  get_buffer |= (size_t)1 << (BIT_BUF_SIZE - 1 - bits_left);
 
   /* Unload the local registers */
   state->next_input_byte = next_input_byte;
   state->bytes_in_buffer = bytes_in_buffer;
   state->get_buffer = get_buffer;
-  state->bits_left = bits_left;
+  //state->bits_left = bits_left;
 
   return TRUE;
 }
@@ -516,6 +525,7 @@ process_restart(j_decompress_ptr cinfo)
   /* include any full bytes in next_marker's count of discarded bytes */
   cinfo->marker->discarded_bytes += entropy->bitstate.bits_left / 8;
   entropy->bitstate.bits_left = 0;
+  entropy->bitstate.get_buffer = 0;
 
   /* Advance past the RSTn marker */
   if (!(*cinfo->marker->read_restart_marker) (cinfo))
