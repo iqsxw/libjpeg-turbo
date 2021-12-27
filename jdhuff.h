@@ -15,7 +15,7 @@
  */
 
 #include "jconfigint.h"
-
+#include <immintrin.h>
 
 /* Derived data constructed for each Huffman table */
 
