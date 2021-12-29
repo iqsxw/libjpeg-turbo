@@ -757,6 +757,33 @@ DLLEXPORT int tjCompress2(tjhandle handle, const unsigned char *srcBuf,
                           int jpegSubsamp, int jpegQual, int flags);
 
 
+/* + ----------------------------------------------------- +
+   |                              |                        |
+   |                              |                        |
+   |                              |                        |
+   |                              y                        |
+   |                              |                        |
+   |                              |                        |
+   |------------- x --------------+------- w ------+       |
+   |                              |                |       |
+   |                              |                |       |
+   |                              h                h       |
+   |                              |                |       |
+   |                              |                |       |
+   |                              +------- w ------+       |
+   |                                                       |
+   |                                                       |
+   |                                                       |
+   |                                                       |
+   |                                                       |
+   |                                                       |
+   + ----------------------------------------------------- +
+*/
+DLLEXPORT int tjDecompressWithCropping(tjhandle handle, const unsigned char *jpegBuf,
+                                       unsigned long jpegSize, unsigned char *dstBuf,
+                                       int width, int pitch, int height, int cropX,
+                                       int cropY, int pixelFormat, int flags);
+
 /**
  * Compress a YUV planar image into a JPEG image.
  *
